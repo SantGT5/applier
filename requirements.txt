@@ -2,5 +2,6 @@ undetected-chromedriver==3.5.5
 PyAutoGUI==0.9.54
 setuptools==82.0.1
 openai==2.38.0
+anthropic==0.112.0
 flask-cors==6.0.2
 Flask==3.1.3

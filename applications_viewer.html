@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Applications Viewer</title>
+    <style>
+      :root {
+        --bg: #f5f6f8;
+        --card: #ffffff;
+        --ink: #1c2430;
+        --muted: #6b7685;
+        --line: #e3e7ec;
+        --accent: #2d6cdf;
+        --accent-soft: #eaf1fe;
+        --green: #1a8a52;
+        --green-soft: #e6f5ed;
+        --red: #c23b3b;
+        --red-soft: #fbeaea;
+        --amber: #9a6b00;
+        --amber-soft: #fbf2dc;
+        --shadow: 0 1px 3px rgba(16, 24, 40, 0.06),
+          0 1px 2px rgba(16, 24, 40, 0.04);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+      }
+
+      header.top {
+        background: var(--card);
+        border-bottom: 1px solid var(--line);
+        padding: 18px 24px;
+      }
+
+      header.top h1 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: -0.01em;
+      }
+
+      header.top p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .wrap {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 20px 24px 80px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin: 18px 0;
+      }
+
+      .btn {
+        appearance: none;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+        border-radius: 8px;
+        padding: 9px 14px;
+        font-size: 13px;
+        cursor: pointer;
+        font-weight: 600;
+        box-shadow: var(--shadow);
+      }
+
+      .btn:hover {
+        border-color: #cdd4dd;
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+
+      .btn.primary:hover {
+        background: #245bc0;
+      }
+
+      .drop {
+        border: 2px dashed #c7cfda;
+        border-radius: 12px;
+        padding: 30px;
+        text-align: center;
+        color: var(--muted);
+        background: var(--card);
+        transition: border-color 0.15s, background 0.15s;
+      }
+
+      .drop.hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .drop strong {
+        color: var(--ink);
+      }
+
+      .filenav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 18px 0 6px;
+      }
+      .chip {
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+      }
+
+      .chip.active {
+        background: var(--ink);
+        color: #fff;
+        border-color: var(--ink);
+      }
+
+      .file {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        margin: 18px 0;
+        overflow: hidden;
+      }
+
+      .file > .head {
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .file .name {
+        font-weight: 700;
+        font-size: 15px;
+      }
+
+      .badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .badge.applied {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+      .badge.failed {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .badge.email {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .badge.generic {
+        background: #eef1f5;
+        color: var(--muted);
+      }
+
+      .count {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .search {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 11px;
+        font-size: 13px;
+        min-width: 220px;
+      }
+
+      .stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 18px 0;
+      }
+
+      .stat {
+        background: #f3f5f8;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .stat b {
+        color: var(--ink);
+      }
+
+      .tablewrap {
+        overflow-x: auto;
+        padding: 12px 6px 6px;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        text-align: left;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        background: var(--card);
+        cursor: pointer;
+        white-space: nowrap;
+        font-size: 12px;
+        color: var(--muted);
+        user-select: none;
+      }
+
+      th:hover {
+        color: var(--ink);
+      }
+
+      th .arrow {
+        opacity: 0.5;
+        font-size: 10px;
+      }
+
+      tbody tr.row:hover {
+        background: #f8fafc;
+        cursor: pointer;
+      }
+
+      td.cell {
+        max-width: 360px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      td.score b {
+        font-variant-numeric: tabular-nums;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      tr.detail > td {
+        background: #fbfcfe;
+        padding: 0;
+      }
+
+      .detail-inner {
+        padding: 14px 18px;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 190px 1fr;
+        gap: 6px 18px;
+      }
+
+      .kv .k {
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .kv .v {
+        word-break: break-word;
+      }
+
+      .block {
+        overflow: auto;
+        margin: 4px 0 0;
+        max-height: 320px;
+        border-radius: 8px;
+        padding: 10px 12px;
+        white-space: pre-wrap;
+        background: #f3f5f8;
+        border: 1px solid var(--line);
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .pill {
+        display: inline-block;
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-radius: 6px;
+        padding: 2px 8px;
+        margin: 2px 4px 2px 0;
+        font-size: 12px;
+      }
+
+      .empty {
+        padding: 26px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <h1>📋 Applications Viewer</h1>
+      <p>
+        Browse your LinkedIn Auto Applier history — applied jobs, skipped/failed
+        jobs, and email-apply leads. Everything stays in your browser; nothing
+        is uploaded.
+      </p>
+    </header>
+
+    <div class="wrap">
+      <div class="toolbar">
+        <button class="btn primary" id="pick">Choose CSV files…</button>
+        <input type="file" id="file" accept=".csv" multiple hidden />
+        <button class="btn" id="server">
+          Load from <code>all excels/</code> (if served over http)
+        </button>
+        <span class="hint">Tip: drag the CSVs anywhere onto this page.</span>
+      </div>
+
+      <div class="drop" id="drop">
+        Drop <strong>all_applied_applications_history.csv</strong>,
+        <strong>all_failed_applications_history.csv</strong>, or
+        <strong>email_apply_jobs.csv</strong> here
+      </div>
+
+      <div class="filenav" id="filenav"></div>
+      <div id="files"></div>
+    </div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        // ---------- CSV parser (RFC4180-ish: handles quoted fields, embedded newlines, "") ----------
+        function parseCSV(text) {
+          const rows = [];
+          let row = [],
+            field = "",
+            inQuotes = false,
+            i = 0;
+          const n = text.length;
+          // strip a leading BOM
+          if (text.charCodeAt(0) === 0xfeff) i = 1;
+          for (; i < n; i++) {
+            const c = text[i];
+            if (inQuotes) {
+              if (c === '"') {
+                if (text[i + 1] === '"') {
+                  field += '"';
+                  i++;
+                } else inQuotes = false;
+              } else field += c;
+            } else {
+              if (c === '"') inQuotes = true;
+              else if (c === ",") {
+                row.push(field);
+                field = "";
+              } else if (c === "\r") {
+                /* skip */
+              } else if (c === "\n") {
+                row.push(field);
+                rows.push(row);
+                row = [];
+                field = "";
+              } else field += c;
+            }
+          }
+          if (field.length || row.length) {
+            row.push(field);
+            rows.push(row);
+          }
+          // drop fully-empty trailing rows
+          return rows.filter((r) => !(r.length === 1 && r[0].trim() === ""));
+        }
+
+        function toObjects(rows) {
+          if (!rows.length) return { headers: [], records: [] };
+          const headers = rows[0];
+          const records = rows.slice(1).map((r) => {
+            const o = {};
+            headers.forEach((h, idx) => {
+              o[h] = r[idx] !== undefined ? r[idx] : "";
+            });
+            return o;
+          });
+          return { headers, records };
+        }
+
+        // ---------- type detection + per-type config ----------
+        function detectType(headers) {
+          const h = headers.map((x) => x.toLowerCase());
+          if (h.includes("apply email")) return "email";
+          if (h.includes("assumed reason") || h.includes("stack trace"))
+            return "failed";
+          if (h.includes("date applied") || h.includes("skills required"))
+            return "applied";
+          return "generic";
+        }
+        const PRIMARY = {
+          applied: [
+            "Title",
+            "Company",
+            "Work Style",
+            "Experience required",
+            "Date Applied",
+            "Job Link",
+            "External Job link",
+          ],
+          failed: [
+            "Job ID",
+            "Assumed Reason",
+            "Date Tried",
+            "Job Link",
+            "External Job link",
+          ],
+          email: [
+            "Title",
+            "Company",
+            "Apply Email",
+            "Email Subject",
+            "Date Found",
+            "Job Link",
+          ],
+          generic: null, // all headers
+        };
+
+        function isUrl(v) {
+          return /^https?:\/\//i.test((v || "").trim());
+        }
+        function looksStructured(v) {
+          v = (v || "").trim();
+          return v.startsWith("{") || v.startsWith("[") || v.length > 160;
+        }
+
+        function cellHTML(header, value) {
+          const h = header.toLowerCase();
+          if (h === "apply email") {
+            return value
+              ? value
+                  .split(/[,;\s]+/)
+                  .filter(Boolean)
+                  .map((e) => `<a href="mailto:${esc(e)}">${esc(e)}</a>`)
+                  .join(", ")
+              : "";
+          }
+          if (h.includes("link") && isUrl(value)) {
+            const label = h.includes("external")
+              ? "open ↗"
+              : h.includes("hr")
+              ? "profile ↗"
+              : "open ↗";
+            return `<a href="${esc(
+              value
+            )}" target="_blank" rel="noopener">${label}</a>`;
+          }
+          return esc(value);
+        }
+
+        function esc(s) {
+          return String(s == null ? "" : s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        // ---------- stats ----------
+        function buildStats(type, records) {
+          const chips = [
+            `<span class="stat"><b>${records.length}</b> rows</span>`,
+          ];
+          const countBy = (key) => {
+            const m = {};
+            records.forEach((r) => {
+              const k = (r[key] || "—").trim() || "—";
+              m[k] = (m[k] || 0) + 1;
+            });
+            return Object.entries(m).sort((a, b) => b[1] - a[1]);
+          };
+          if (type === "applied") {
+            countBy("Work Style")
+              .slice(0, 6)
+              .forEach(([k, v]) =>
+                chips.push(`<span class="stat">${esc(k)}: <b>${v}</b></span>`)
+              );
+          } else if (type === "failed") {
+            countBy("Assumed Reason")
+              .slice(0, 8)
+              .forEach(([k, v]) =>
+                chips.push(`<span class="stat">${esc(k)}: <b>${v}</b></span>`)
+              );
+          } else if (type === "email") {
+            chips.push(
+              `<span class="stat">unique companies: <b>${
+                new Set(records.map((r) => r.Company)).size
+              }</b></span>`
+            );
+          }
+          return chips.join("");
+        }
+
+        // ---------- render one file ----------
+        const files = []; // {id, name, type, headers, records}
+        let activeId = null;
+
+        function render() {
+          const nav = document.getElementById("filenav");
+          const host = document.getElementById("files");
+          nav.innerHTML = files
+            .map(
+              (f) =>
+                `<div class="chip ${
+                  f.id === activeId ? "active" : ""
+                }" data-id="${f.id}">${esc(f.name)} <span style="opacity:.6">(${
+                  f.records.length
+                })</span></div>`
+            )
+            .join("");
+          nav.querySelectorAll(".chip").forEach(
+            (c) =>
+              (c.onclick = () => {
+                activeId = c.dataset.id;
+                render();
+              })
+          );
+
+          host.innerHTML = "";
+          files
+            .filter((f) => f.id === activeId)
+            .forEach((f) => host.appendChild(renderFile(f)));
+        }
+
+        function renderFile(f) {
+          const cols =
+            PRIMARY[f.type] &&
+            PRIMARY[f.type].filter((c) => f.headers.includes(c)).length
+              ? PRIMARY[f.type].filter((c) => f.headers.includes(c))
+              : f.headers;
+
+          const el = document.createElement("div");
+          el.className = "file";
+          el.innerHTML = `
+      <div class="head">
+        <span class="name">${esc(f.name)}</span>
+        <span class="badge ${f.type}">${f.type}</span>
+        <span class="count" data-count></span>
+        <span class="spacer"></span>
+        <input class="search" type="search" placeholder="Search ${
+          f.records.length
+        } rows…" />
+      </div>
+      <div class="stats">${buildStats(f.type, f.records)}</div>
+      <div class="tablewrap"><table>
+        <thead><tr>${cols
+          .map(
+            (c) =>
+              `<th data-col="${esc(c)}">${esc(
+                c
+              )} <span class="arrow"></span></th>`
+          )
+          .join("")}</tr></thead>
+        <tbody></tbody>
+      </table></div>`;
+
+          const tbody = el.querySelector("tbody");
+          const countEl = el.querySelector("[data-count]");
+          const search = el.querySelector(".search");
+          let sortCol = null,
+            sortDir = 1;
+
+          function filtered() {
+            const q = search.value.trim().toLowerCase();
+            let recs = f.records.map((r, i) => ({ r, i }));
+            if (q)
+              recs = recs.filter(({ r }) =>
+                f.headers.some((h) => (r[h] || "").toLowerCase().includes(q))
+              );
+            if (sortCol) {
+              recs.sort((a, b) => {
+                let x = a.r[sortCol] || "",
+                  y = b.r[sortCol] || "";
+                const nx = parseFloat(x),
+                  ny = parseFloat(y);
+                const bothNum =
+                  !isNaN(nx) &&
+                  !isNaN(ny) &&
+                  /^[\d.,\s$+-]+$/.test(x) &&
+                  /^[\d.,\s$+-]+$/.test(y);
+                let cmp = bothNum ? nx - ny : x.localeCompare(y);
+                return cmp * sortDir;
+              });
+            }
+            return recs;
+          }
+
+          function draw() {
+            const recs = filtered();
+            countEl.textContent =
+              recs.length === f.records.length
+                ? `${recs.length} rows`
+                : `${recs.length} of ${f.records.length}`;
+            tbody.innerHTML = "";
+            if (!recs.length) {
+              tbody.innerHTML = `<tr><td class="empty" colspan="${cols.length}">No matching rows.</td></tr>`;
+              return;
+            }
+            recs.forEach(({ r, i }) => {
+              const tr = document.createElement("tr");
+              tr.className = "row";
+              tr.innerHTML = cols
+                .map(
+                  (c) =>
+                    `<td class="cell" title="${esc(
+                      (r[c] || "").slice(0, 400)
+                    )}">${cellHTML(c, r[c])}</td>`
+                )
+                .join("");
+              tr.onclick = (ev) => {
+                if (ev.target.tagName === "A") return;
+                toggleDetail(tr, r);
+              };
+              tbody.appendChild(tr);
+            });
+          }
+
+          function toggleDetail(tr, r) {
+            const next = tr.nextElementSibling;
+            if (next && next.classList.contains("detail")) {
+              next.remove();
+              return;
+            }
+            const dr = document.createElement("tr");
+            dr.className = "detail";
+            const kv = f.headers
+              .map((h) => {
+                const v = r[h] || "";
+                let valHTML;
+                if (h.toLowerCase() === "apply email") valHTML = cellHTML(h, v);
+                else if (h.toLowerCase().includes("link") && isUrl(v))
+                  valHTML = `<a href="${esc(
+                    v
+                  )}" target="_blank" rel="noopener">${esc(v)}</a>`;
+                else if (looksStructured(v))
+                  valHTML = `<div class="block">${esc(v)}</div>`;
+                else valHTML = esc(v) || '<span style="color:#aab">—</span>';
+                return `<div class="k">${esc(
+                  h
+                )}</div><div class="v">${valHTML}</div>`;
+              })
+              .join("");
+            dr.innerHTML = `<td colspan="${cols.length}"><div class="detail-inner"><div class="kv">${kv}</div></div></td>`;
+            tr.after(dr);
+          }
+
+          search.addEventListener("input", draw);
+          el.querySelectorAll("th").forEach((th) => {
+            th.onclick = () => {
+              const c = th.dataset.col;
+              if (sortCol === c) sortDir *= -1;
+              else {
+                sortCol = c;
+                sortDir = 1;
+              }
+              el.querySelectorAll("th .arrow").forEach(
+                (a) => (a.textContent = "")
+              );
+              th.querySelector(".arrow").textContent = sortDir > 0 ? "▲" : "▼";
+              draw();
+            };
+          });
+
+          draw();
+          return el;
+        }
+
+        // ---------- load files ----------
+        function addFile(name, text) {
+          const rows = parseCSV(text);
+          const { headers, records } = toObjects(rows);
+          if (!headers.length) return;
+          const id = "f" + Date.now() + Math.round(performance.now());
+          // replace an existing file with the same name
+          const existing = files.findIndex((f) => f.name === name);
+          const entry = {
+            id,
+            name,
+            type: detectType(headers),
+            headers,
+            records,
+          };
+          if (existing >= 0) files[existing] = entry;
+          else files.push(entry);
+          activeId = entry.id;
+          render();
+        }
+
+        function readFiles(fileList) {
+          [...fileList].forEach((file) => {
+            const reader = new FileReader();
+            reader.onload = () => addFile(file.name, reader.result);
+            reader.readAsText(file);
+          });
+        }
+
+        // file picker
+        const fileInput = document.getElementById("file");
+        document.getElementById("pick").onclick = () => fileInput.click();
+        fileInput.onchange = () => readFiles(fileInput.files);
+
+        // drag & drop
+        const drop = document.getElementById("drop");
+        ["dragenter", "dragover"].forEach((e) =>
+          document.addEventListener(e, (ev) => {
+            ev.preventDefault();
+            drop.classList.add("hover");
+          })
+        );
+        ["dragleave", "drop"].forEach((e) =>
+          document.addEventListener(e, (ev) => {
+            ev.preventDefault();
+            if (e === "drop" || ev.target === drop)
+              drop.classList.remove("hover");
+          })
+        );
+        document.addEventListener("drop", (ev) => {
+          ev.preventDefault();
+          drop.classList.remove("hover");
+          if (ev.dataTransfer && ev.dataTransfer.files.length)
+            readFiles(ev.dataTransfer.files);
+        });
+
+        // load from server (works only when this page is served over http/https, e.g. python -m http.server)
+        document.getElementById("server").onclick = async () => {
+          const names = [
+            "all_applied_applications_history.csv",
+            "all_failed_applications_history.csv",
+            "email_apply_jobs.csv",
+          ];
+          let any = false;
+          for (const n of names) {
+            try {
+              const res = await fetch("all%20excels/" + n, {
+                cache: "no-store",
+              });
+              if (res.ok) {
+                addFile(n, await res.text());
+                any = true;
+              }
+            } catch (e) {
+              /* ignore */
+            }
+          }
+          if (!any)
+            alert(
+              "Couldn't fetch the CSVs.\n\nThis works only when the page is served over http (e.g. run `python -m http.server` in the project folder, then open http://localhost:8000/applications_viewer.html).\n\nOtherwise just use “Choose CSV files…”."
+            );
+        };
+      })();
+    </script>
+  </body>
+</html>

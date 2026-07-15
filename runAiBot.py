@@ -53,22 +53,36 @@ from modules.open_chrome import *
 from modules.validator import validate_config
 
 if use_AI:
-    from modules.ai.openaiConnections import (
-        ai_create_openai_client,
-        ai_extract_skills,
-        ai_answer_question,
-        ai_close_openai_client,
-    )
-    from modules.ai.deepseekConnections import (
-        deepseek_create_client,
-        deepseek_extract_skills,
-        deepseek_answer_question,
-    )
-    from modules.ai.geminiConnections import (
-        gemini_create_client,
-        gemini_extract_skills,
-        gemini_answer_question,
-    )
+    # Import only the selected provider's module so that an uninstalled, unused
+    # provider SDK (e.g. google-generativeai for Gemini) doesn't crash the bot.
+    if ai_provider == "claude":
+        from modules.ai.claudeConnections import (
+            claude_create_client,
+            claude_extract_skills,
+            claude_answer_question,
+            claude_check_job_relevance,
+            claude_close_client,
+        )
+    elif ai_provider == "gemini":
+        from modules.ai.geminiConnections import (
+            gemini_create_client,
+            gemini_extract_skills,
+            gemini_answer_question,
+        )
+    else:
+        # openai and deepseek both rely on the OpenAI-compatible client helpers.
+        from modules.ai.openaiConnections import (
+            ai_create_openai_client,
+            ai_extract_skills,
+            ai_answer_question,
+            ai_close_openai_client,
+        )
+        if ai_provider == "deepseek":
+            from modules.ai.deepseekConnections import (
+                deepseek_create_client,
+                deepseek_extract_skills,
+                deepseek_answer_question,
+            )
 
 from typing import Literal
 
@@ -898,7 +912,17 @@ def answer_questions(
                 if answer == "":
                     if use_AI and aiClient:
                         try:
-                            if ai_provider.lower() == "openai":
+                            if ai_provider.lower() == "claude":
+                                answer = claude_answer_question(
+                                    aiClient,
+                                    label_org,
+                                    options=None,
+                                    question_type="text",
+                                    job_description=job_description,
+                                    about_company=None,
+                                    user_information_all=user_information_all,
+                                )
+                            elif ai_provider.lower() == "openai":
                                 answer = ai_answer_question(
                                     aiClient,
                                     label_org,
@@ -972,7 +996,17 @@ def answer_questions(
                     ##> ------ Yang Li : MARKYangL - Feature ------
                     if use_AI and aiClient:
                         try:
-                            if ai_provider.lower() == "openai":
+                            if ai_provider.lower() == "claude":
+                                answer = claude_answer_question(
+                                    aiClient,
+                                    label_org,
+                                    options=None,
+                                    question_type="textarea",
+                                    job_description=job_description,
+                                    about_company=None,
+                                    user_information_all=user_information_all,
+                                )
+                            elif ai_provider.lower() == "openai":
                                 answer = ai_answer_question(
                                     aiClient,
                                     label_org,
@@ -1472,10 +1506,12 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         skip_count += 1
                         continue
 
-                    if use_AI and description != "Unknown":
+                    if use_AI and aiClient and description != "Unknown":
                         ##> ------ Yang Li : MARKYangL - Feature ------
                         try:
-                            if ai_provider.lower() == "openai":
+                            if ai_provider.lower() == "claude":
+                                skills = claude_extract_skills(aiClient, description)
+                            elif ai_provider.lower() == "openai":
                                 skills = ai_extract_skills(aiClient, description)
                             elif ai_provider.lower() == "deepseek":
                                 skills = deepseek_extract_skills(aiClient, description)
@@ -1488,6 +1524,60 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             print_lg("Failed to extract skills:", e)
                             skills = "Error extracting skills"
                         ##<
+
+                    # AI relevance filtering: score this job against your profile and skip poor fits.
+                    if (
+                        use_AI
+                        and aiClient
+                        and ai_provider.lower() == "claude"
+                        and ai_filter_jobs
+                        and description != "Unknown"
+                    ):
+                        try:
+                            relevance = claude_check_job_relevance(
+                                aiClient,
+                                description,
+                                about_company=company,
+                                user_information_all=user_information_all,
+                            )
+                            match_score = relevance.get("match_score")
+                            relevance_reasons = relevance.get("reasons", "")
+                            if match_score is not None:
+                                print_lg(
+                                    f'AI job match score: {match_score}/100 (threshold {ai_min_match_score}). '
+                                    f'Reason: {relevance_reasons}'
+                                )
+                                if (
+                                    ai_min_match_score > 0
+                                    and match_score < ai_min_match_score
+                                ):
+                                    message = (
+                                        f"\nAI match score {match_score} < {ai_min_match_score} "
+                                        f"for '{title}' at '{company}'. Reason: {relevance_reasons}\n"
+                                        f"Missing skills: {relevance.get('missing_skills')}\n"
+                                    )
+                                    print_lg(message)
+                                    failed_job(
+                                        job_id,
+                                        job_link,
+                                        resume,
+                                        date_listed,
+                                        "AI: low relevance",
+                                        message,
+                                        "Skipped",
+                                        screenshot_name,
+                                    )
+                                    rejected_jobs.add(job_id)
+                                    skip_count += 1
+                                    continue
+                            else:
+                                print_lg(
+                                    "AI relevance check returned no score; applying anyway.",
+                                    relevance,
+                                )
+                        except Exception as e:
+                            # Fail open: if the relevance check errors, don't skip the job.
+                            print_lg("Failed AI relevance check, applying anyway:", e)
 
                     uploaded = False
                     # Case 1: Easy Apply Button
@@ -1883,7 +1973,9 @@ def main() -> None:
         #     except Exception as e:
         #         print_lg("Opening OpenAI chatGPT tab failed!")
         if use_AI:
-            if ai_provider == "openai":
+            if ai_provider == "claude":
+                aiClient = claude_create_client()
+            elif ai_provider == "openai":
                 aiClient = ai_create_openai_client()
             ##> ------ Yang Li : MARKYangL - Feature ------
             # Create DeepSeek client
@@ -2012,7 +2104,9 @@ def main() -> None:
         ##> ------ Yang Li : MARKYangL - Feature ------
         if use_AI and aiClient:
             try:
-                if ai_provider.lower() == "openai":
+                if ai_provider.lower() == "claude":
+                    claude_close_client(aiClient)
+                elif ai_provider.lower() == "openai":
                     ai_close_openai_client(aiClient)
                 elif ai_provider.lower() == "deepseek":
                     ai_close_openai_client(aiClient)

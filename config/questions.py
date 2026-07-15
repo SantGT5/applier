@@ -108,8 +108,29 @@ Software Engineer with 7 years of experience delivering scalable solutions and l
 
 # Your user_information_all letter in quotes, use \n to add line breaks if using single quotes "user_information_all".You can skip \n if using triple quotes """user_information_all""" (This question makes sense though)
 # We use this to pass to AI to generate answer from information , Assuing Information contians eg: resume  all the information like name, experience, skills, Country, any illness etc.
+# This profile is also used by the Claude AI relevance filter to score how well each job matches you.
 user_information_all = """
-Software Engineer with 7 years of experience delivering scalable solutions and leading high-performing teams. Proven track record in designing strategic, efficient systems and solving complex technical challenges. Experienced team leader with a strong focus on collaboration, innovation, and driving results that align with business goals.
+Name: Gian de Abreu
+Title: Senior Software Engineer (AI & Backend Systems)
+Location: Netherlands (EU work authorization). Phone: +31 6 42118304. GitHub: SantGT5.
+Experience: 7+ years building scalable backend systems, AI-powered applications, microservices, and cloud-native solutions, with a track record of leading technical initiatives and delivering high-impact products in fintech and SaaS.
+
+Core languages & frameworks: Python, Golang, Node.js, TypeScript, JavaScript, React, React Native, Vue.
+Backend & APIs: REST APIs, GraphQL, API design, microservices architecture, event-driven architecture, distributed systems, system design.
+Databases & data: MongoDB, PostgreSQL, InfluxDB, data pipelines, Redis.
+DevOps & tooling: Docker, Ansible, CI/CD, GitHub Actions, Grafana, monitoring.
+Messaging & IoT: RabbitMQ, MQTT.
+AI & emerging tech: Large Language Models (LLMs), vLLM, OpenAI API, prompt engineering, AI agents, generative AI, AI automation.
+Methodologies: Agile, Scrum, Kanban. Leadership: mentoring, team & technical leadership, cross-functional collaboration.
+
+Work history:
+- Bluem (Software Engineer, Nov 2024-present): led AI/LLM-powered solutions; built the WealthCheck SDK for financial document analysis; designed scalable backend services and APIs in Python, Golang, and TypeScript; high-volume document processing with RabbitMQ/Redis; deployed cloud-native apps with Docker, Ansible, CI/CD, and vLLM.
+- WonderBit B.V. (Full Stack Engineer, Jul 2023-Nov 2024): full-stack delivery with Node.js, Python, React, Vue; Docker containerization; scalable REST APIs; CI/CD with Ansible.
+- Billetero (Freelance Software Engineer, Jan 2024-Apr 2024): AI-powered LLM document processing; backend in Python and Golang; containerized deployments with Docker and Ansible.
+- Plauti Data Management (Full Stack Engineer, May 2022-Jun 2023): SaaS data quality platform; Node.js backend microservices; REST APIs; unit/integration testing with Vitest.
+- BBVA Bank (Software Developer, Feb 2019-Apr 2022): internal banking apps with React, Node.js, MongoDB; transaction monitoring dashboard.
+
+Preferences: Remote work; contract or temporary engagements; backend, full-stack, Python, Golang, Node.js, or TypeScript roles at mid-senior/senior level. Strong fit for AI/LLM, fintech, and SaaS. Not a fit for primarily C#/.NET, C/C++, PHP, Ruby, embedded.
 """
 ##<
 """

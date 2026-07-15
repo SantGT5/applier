@@ -64,6 +64,8 @@ generated_resume_path = "all resumes/"  # (In Development)
 # Directory and name of the files where history of applied jobs is saved (Sentence after the last "/" will be considered as the file name).
 file_name = "all excels/all_applied_applications_history.csv"
 failed_file_name = "all excels/all_failed_applications_history.csv"
+# Log of jobs that ask you to apply by email (the AI extracts the address so you can follow up manually).
+email_apply_file_name = "all excels/email_apply_jobs.csv"
 logs_folder_path = "logs/"
 
 # Set the maximum amount of time allowed to wait between each click in secs

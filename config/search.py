@@ -29,7 +29,7 @@ search_terms = [
 ]
 
 # Search location, this will be filled in "City, state, or zip code" search box. If left empty as "", tool will not fill it.
-search_location = "Canada"  # Some valid examples: "", "United States", "European Union", "Australia", "Worldwide", "Canada".
+search_location = "Australia and New Zealand"  # Some valid examples: "", "United States", "European Union", "Australia and New Zealand", "Worldwide", "Canada".
 
 # After how many number of applications in current search should the bot switch to next search?
 switch_number = 30  # Only numbers greater than 0... Don't put in quotes
@@ -136,6 +136,26 @@ did_masters = True  # True or False, Note: True or False are case-sensitive
 
 # Avoid applying to jobs if their required experience is above your current_experience. (Set value as -1 if you want to apply to all ignoring their required experience...)
 current_experience = -1  # Integers > -2 (Ex: -1, 0, 1, 2, 3, 4...)
+##
+
+
+## >>>>>>>>>>> AI RELEVANCE FILTERING (Claude) <<<<<<<<<<<
+# These work only when AI is enabled (`use_AI = True` and `ai_provider = "claude"` in config/secrets.py).
+# Claude reads each job description, compares it against your profile (`user_information_all` in
+# config/questions.py), and scores the fit from 0-100. Jobs below the threshold are skipped.
+
+# Turn AI relevance filtering on/off. If False, AI is still used for skills/questions but never skips a job.
+ai_filter_jobs = True  # True or False, Note: True or False are case-sensitive
+
+# Minimum AI match score (0-100) required to apply. Jobs scoring below this are skipped.
+# Higher = stricter (fewer, more relevant applications). Set to 0 to score every job but never skip ("advise only").
+# Examples: 30 (lenient), 50 (balanced), 70 (strict).
+ai_min_match_score = 50  # Integer from 0 to 100
+
+# Detect jobs whose description asks you to apply by EMAIL (e.g. "send your CV to ...") and
+# log the email address + subject to `email_apply_file_name` (see config/settings.py) so you
+# can follow up manually. Works even if `ai_filter_jobs` is False.
+ai_log_email_apply = True  # True or False, Note: True or False are case-sensitive
 ##
 
 

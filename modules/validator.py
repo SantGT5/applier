@@ -170,11 +170,18 @@ def validate_secrets() -> None | ValueError | TypeError:
     check_boolean(stream_output, "stream_output")
     
     ##> ------ Yang Li : MARKYangL - Feature ------
-    # Validate DeepSeek configuration
-    check_string(ai_provider, "ai_provider", ["openai", "deepseek"])
+    # Validate AI provider configuration
+    check_string(ai_provider, "ai_provider", ["claude", "glm", "openai", "deepseek", "gemini"])
 
     ##> ------ Tim L : tulxoro - Refactor ------
-    if ai_provider == "deepseek":
+    if ai_provider == "claude":
+        check_string(claude_api_key, "claude_api_key", min_length=10)
+        check_string(claude_model, "claude_model", min_length=5)
+    elif ai_provider == "glm":
+        check_string(glm_api_key, "glm_api_key", min_length=10)
+        check_string(glm_model, "glm_model", min_length=3)
+        check_string(glm_api_url, "glm_api_url", min_length=5)
+    elif ai_provider == "deepseek":
         check_string(llm_model, "deepseek_model", ["deepseek-chat", "deepseek-reasoner"])
     else:
         check_string(llm_model, "llm_model")
