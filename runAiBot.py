@@ -63,6 +63,14 @@ if use_AI:
             claude_check_job_relevance,
             claude_close_client,
         )
+    elif ai_provider == "glm":
+        from modules.ai.glmConnections import (
+            glm_create_client,
+            glm_extract_skills,
+            glm_answer_question,
+            glm_check_job_relevance,
+            glm_close_client,
+        )
     elif ai_provider == "gemini":
         from modules.ai.geminiConnections import (
             gemini_create_client,
@@ -922,6 +930,16 @@ def answer_questions(
                                     about_company=None,
                                     user_information_all=user_information_all,
                                 )
+                            elif ai_provider.lower() == "glm":
+                                answer = glm_answer_question(
+                                    aiClient,
+                                    label_org,
+                                    options=None,
+                                    question_type="text",
+                                    job_description=job_description,
+                                    about_company=None,
+                                    user_information_all=user_information_all,
+                                )
                             elif ai_provider.lower() == "openai":
                                 answer = ai_answer_question(
                                     aiClient,
@@ -998,6 +1016,16 @@ def answer_questions(
                         try:
                             if ai_provider.lower() == "claude":
                                 answer = claude_answer_question(
+                                    aiClient,
+                                    label_org,
+                                    options=None,
+                                    question_type="textarea",
+                                    job_description=job_description,
+                                    about_company=None,
+                                    user_information_all=user_information_all,
+                                )
+                            elif ai_provider.lower() == "glm":
+                                answer = glm_answer_question(
                                     aiClient,
                                     label_org,
                                     options=None,
@@ -1511,6 +1539,8 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         try:
                             if ai_provider.lower() == "claude":
                                 skills = claude_extract_skills(aiClient, description)
+                            elif ai_provider.lower() == "glm":
+                                skills = glm_extract_skills(aiClient, description)
                             elif ai_provider.lower() == "openai":
                                 skills = ai_extract_skills(aiClient, description)
                             elif ai_provider.lower() == "deepseek":
@@ -1529,17 +1559,25 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     if (
                         use_AI
                         and aiClient
-                        and ai_provider.lower() == "claude"
+                        and ai_provider.lower() in ("claude", "glm")
                         and ai_filter_jobs
                         and description != "Unknown"
                     ):
                         try:
-                            relevance = claude_check_job_relevance(
-                                aiClient,
-                                description,
-                                about_company=company,
-                                user_information_all=user_information_all,
-                            )
+                            if ai_provider.lower() == "glm":
+                                relevance = glm_check_job_relevance(
+                                    aiClient,
+                                    description,
+                                    about_company=company,
+                                    user_information_all=user_information_all,
+                                )
+                            else:
+                                relevance = claude_check_job_relevance(
+                                    aiClient,
+                                    description,
+                                    about_company=company,
+                                    user_information_all=user_information_all,
+                                )
                             match_score = relevance.get("match_score")
                             relevance_reasons = relevance.get("reasons", "")
                             if match_score is not None:
@@ -1975,6 +2013,8 @@ def main() -> None:
         if use_AI:
             if ai_provider == "claude":
                 aiClient = claude_create_client()
+            elif ai_provider == "glm":
+                aiClient = glm_create_client()
             elif ai_provider == "openai":
                 aiClient = ai_create_openai_client()
             ##> ------ Yang Li : MARKYangL - Feature ------
@@ -2106,6 +2146,8 @@ def main() -> None:
             try:
                 if ai_provider.lower() == "claude":
                     claude_close_client(aiClient)
+                elif ai_provider.lower() == "glm":
+                    glm_close_client(aiClient)
                 elif ai_provider.lower() == "openai":
                     ai_close_openai_client(aiClient)
                 elif ai_provider.lower() == "deepseek":

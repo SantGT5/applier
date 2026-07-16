@@ -29,7 +29,7 @@ search_terms = [
 ]
 
 # Search location, this will be filled in "City, state, or zip code" search box. If left empty as "", tool will not fill it.
-search_location = "Australia and New Zealand"  # Some valid examples: "", "United States", "European Union", "Australia and New Zealand", "Worldwide", "Canada".
+search_location = "United States"  # Some valid examples: "", "United States", "European Union", "Australia and New Zealand", "Worldwide", "Canada".
 
 # After how many number of applications in current search should the bot switch to next search?
 switch_number = 30  # Only numbers greater than 0... Don't put in quotes
