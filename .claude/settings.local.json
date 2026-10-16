@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(python3 -m py_compile runAiBot.py modules/ai/claudeConnections.py modules/ai/prompts.py config/secrets.py config/search.py config/questions.py)",
+      "Bash(python3 -c \"import anthropic, sys; print\\('anthropic', anthropic.__version__\\)\")",
+      "Bash(python3 -c \"import openai; print\\('openai installed at', openai.__file__\\)\")",
+      "Bash(python3 -m pip install \"anthropic>=0.69.0\")",
+      "Bash(python3 -m py_compile runAiBot.py)",
+      "Bash(python3 -m py_compile runAiBot.py modules/ai/prompts.py config/settings.py config/search.py)",
+      "Bash(python3 -c ' *)",
+      "Bash(grep -v \"^--\\\\|^Creating\\\\|^----\\\\|^Using\\\\|^Check\\\\|^$\")",
+      "Bash(command -v node)",
+      "Bash(python -c \"import openai; print\\('openai', openai.__version__\\)\")",
+      "Bash(python -c \"import zhipuai; print\\('zhipuai', zhipuai.__version__\\)\")",
+      "Bash(python3 -c \"import openai; print\\('openai', openai.__version__\\)\")",
+      "Bash(python3 -c \"import zhipuai; print\\('zhipuai', zhipuai.__version__\\)\")",
+      "Bash(.venv/bin/python -c \"import openai; print\\('openai', openai.__version__\\)\")",
+      "Bash(.venv/bin/python -c \"import zhipuai; print\\('zhipuai', zhipuai.__version__\\)\")",
+      "Bash(.venv/bin/python -c \"import anthropic; print\\('anthropic', anthropic.__version__\\)\")",
+      "Bash(.venv/bin/python -c \"import ast; ast.parse\\(open\\('runAiBot.py'\\).read\\(\\)\\); ast.parse\\(open\\('modules/ai/glmConnections.py'\\).read\\(\\)\\); ast.parse\\(open\\('config/secrets.py'\\).read\\(\\)\\); print\\('syntax OK'\\)\")",
+      "Bash(.venv/bin/python -c \"import modules.ai.glmConnections as g; print\\('import OK ->', [f for f in dir\\(g\\) if f.startswith\\('glm_'\\)]\\)\")",
+      "Bash(.venv/bin/python -c \"import ast; ast.parse\\(open\\('modules/validator.py'\\).read\\(\\)\\); print\\('validator syntax OK'\\)\")",
+      "Bash(.venv/bin/python -c ' *)"
+    ]
+  }
+}

@@ -34,6 +34,7 @@ from selenium.common.exceptions import (
     ElementNotInteractableException,
     NoSuchElementException,
     NoSuchWindowException,
+    TimeoutException,
     WebDriverException,
 )
 from selenium.webdriver.common.by import By
@@ -49,6 +50,7 @@ from config.secrets import ai_provider, password, use_AI, username
 from config.settings import *
 from modules.clickers_and_finders import *
 from modules.helpers import *
+from modules.linkedin_ui import *
 from modules.open_chrome import *
 from modules.validator import validate_config
 
@@ -57,34 +59,35 @@ if use_AI:
     # provider SDK (e.g. google-generativeai for Gemini) doesn't crash the bot.
     if ai_provider == "claude":
         from modules.ai.claudeConnections import (
-            claude_create_client,
-            claude_extract_skills,
             claude_answer_question,
             claude_check_job_relevance,
             claude_close_client,
+            claude_create_client,
+            claude_extract_skills,
         )
     elif ai_provider == "glm":
         from modules.ai.glmConnections import (
-            glm_create_client,
-            glm_extract_skills,
             glm_answer_question,
             glm_check_job_relevance,
             glm_close_client,
+            glm_create_client,
+            glm_extract_skills,
         )
     elif ai_provider == "gemini":
         from modules.ai.geminiConnections import (
+            gemini_answer_question,
             gemini_create_client,
             gemini_extract_skills,
-            gemini_answer_question,
         )
     else:
         # openai and deepseek both rely on the OpenAI-compatible client helpers.
         from modules.ai.openaiConnections import (
-            ai_create_openai_client,
-            ai_extract_skills,
             ai_answer_question,
             ai_close_openai_client,
+            ai_create_openai_client,
+            ai_extract_skills,
         )
+
         if ai_provider == "deepseek":
             from modules.ai.deepseekConnections import (
                 deepseek_create_client,
@@ -267,116 +270,61 @@ def get_applied_job_ids() -> set[str]:
     return job_ids
 
 
-def set_search_location() -> None:
+saved_debug_labels: set[str] = set()
+
+
+def save_debug_page(label: str) -> None:
     """
-    Function to set search location
+    Saves a screenshot and the page HTML to the screenshots folder, so a selector
+    breakage (LinkedIn changing its page) can be diagnosed from what the browser showed.
+    Saves once per `label` per run, so a repeated failure doesn't fill the disk.
     """
-    if search_location.strip():
-        try:
-            print_lg(f'Setting search location as: "{search_location.strip()}"')
-            search_location_ele = try_xp(
-                driver,
-                ".//input[@aria-label='City, state, or zip code'and not(@disabled)]",
-                False,
-            )  #  and not(@aria-hidden='true')]")
-            text_input(actions, search_location_ele, search_location, "Search Location")
-        except ElementNotInteractableException:
-            try_xp(
-                driver,
-                ".//label[@class='jobs-search-box__input-icon jobs-search-box__keywords-label']",
-            )
-            actions.send_keys(Keys.TAB, Keys.TAB).perform()
-            actions.key_down(Keys.CONTROL).send_keys("a").key_up(Keys.CONTROL).perform()
-            actions.send_keys(search_location.strip()).perform()
-            sleep(2)
-            actions.send_keys(Keys.ENTER).perform()
-            try_xp(driver, ".//button[@aria-label='Cancel']")
-        except Exception as e:
-            try_xp(driver, ".//button[@aria-label='Cancel']")
-            print_lg(
-                "Failed to update search location, continuing with default location!", e
-            )
+    if label in saved_debug_labels:
+        return
+    saved_debug_labels.add(label)
+    try:
+        print_lg(f"Page URL at '{label}': {driver.current_url}")
+        debug_path = (
+            logs_folder_path
+            + "/screenshots/"
+            + f"{label} - {datetime.now()}".replace(":", ".").replace("/", "-")
+        ).replace("//", "/")
+        driver.save_screenshot(debug_path + ".png")
+        with open(debug_path + ".html", "w", encoding="utf-8") as file:
+            file.write(driver.page_source)
+        print_lg(f'Saved debug screenshot and page HTML: "{debug_path}.png/.html"')
+    except Exception as e:
+        print_lg(f"Failed to save debug info for '{label}'!", e)
 
 
 def apply_filters() -> None:
     """
-    Function to apply job search filters
+    Search filters are applied through the search URL (see `build_jobs_search_url`), because
+    LinkedIn's AI-powered jobs search has no "All filters" panel. This warns about filters
+    the URL can't express and, if enabled, pauses so you can review the results.
     """
-    set_search_location()
-
-    try:
-        recommended_wait = 1 if click_gap < 1 else 0
-
-        wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, '//button[normalize-space()="All filters"]')
-            )
-        ).click()
-        buffer(recommended_wait)
-
-        wait_span_click(driver, sort_by, section="Sort by")
-        wait_span_click(driver, date_posted, section="Date posted")
-        buffer(recommended_wait)
-
-        multi_sel_noWait(driver, experience_level, section="Experience level")
-        multi_sel_noWait(driver, companies, actions)
-        if experience_level or companies:
-            buffer(recommended_wait)
-
-        multi_sel_noWait(driver, job_type, section="Job type")
-        multi_sel_noWait(driver, on_site, section="On-site")
-        if job_type or on_site:
-            buffer(recommended_wait)
-
-        if easy_apply_only:
-            boolean_button_click(driver, actions, "Easy Apply")
-
-        multi_sel_noWait(driver, location, section="Location")
-        multi_sel_noWait(driver, industry, section="Industry")
-        if location or industry:
-            buffer(recommended_wait)
-
-        multi_sel_noWait(driver, job_function, section="Job function")
-        multi_sel_noWait(driver, job_titles, section="Job titles")
-        if job_function or job_titles:
-            buffer(recommended_wait)
-
-        if under_10_applicants:
-            boolean_button_click(driver, actions, "Under 10 applicants")
-        if in_your_network:
-            boolean_button_click(driver, actions, "In your network")
-        if fair_chance_employer:
-            boolean_button_click(driver, actions, "Fair Chance Employer")
-
-        wait_span_click(driver, salary)
-        buffer(recommended_wait)
-
-        multi_sel_noWait(driver, benefits, section="Benefits")
-        multi_sel_noWait(driver, commitments, section="Commitments")
-        if benefits or commitments:
-            buffer(recommended_wait)
-
-        show_results_button: WebElement = driver.find_element(
-            By.XPATH,
-            '//button[contains(translate(@aria-label, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "apply current filters to show")]',
+    for name in unsupported_search_filters(
+        companies=companies,
+        location=location,
+        industry=industry,
+        job_function=job_function,
+        job_titles=job_titles,
+        benefits=benefits,
+        commitments=commitments,
+        fair_chance_employer=fair_chance_employer,
+    ):
+        print_lg(
+            f'Search filter "{name}" is not supported on LinkedIn\'s new jobs search and was ignored.'
         )
-        show_results_button.click()
 
-        global pause_after_filters
-        if pause_after_filters and "Turn off Pause after search" == pyautogui.confirm(
-            "These are your configured search results and filter. It is safe to change them while this dialog is open, any changes later could result in errors and skipping this search run.",
-            "Please check your results",
-            ["Turn off Pause after search", "Look's good, Continue"],
-        ):
-            pause_after_filters = False
-
-    except Exception as e:
-        print_lg("Setting the preferences failed!")
-        pyautogui.confirm(
-            f"Faced error while applying filters. Please make sure correct filters are selected, click on show results and click on any button of this dialog, I know it sucks. Can't turn off Pause after search when error occurs! ERROR: {e}",
-            ["Doesn't look good, but Continue XD", "Look's good, Continue"],
-        )
-        # print_lg(e)
+    global pause_after_filters
+    # "Continue" goes first: the terminal prompt picks the first button when you just press Enter.
+    if pause_after_filters and "Turn off Pause after search" == pyautogui.confirm(
+        "These are your configured search results and filter. It is safe to change them while this dialog is open, any changes later could result in errors and skipping this search run.",
+        "Please check your results",
+        ["Look's good, Continue", "Turn off Pause after search"],
+    ):
+        pause_after_filters = False
 
 
 def get_page_info() -> tuple[WebElement | None, int | None]:
@@ -384,19 +332,10 @@ def get_page_info() -> tuple[WebElement | None, int | None]:
     Function to get pagination element and current page number
     """
     try:
-        pagination_element = try_find_by_classes(
-            driver,
-            [
-                "jobs-search-pagination__pages",
-                "artdeco-pagination",
-                "artdeco-pagination__pages",
-            ],
-        )
+        pagination_element = driver.find_element(By.XPATH, PAGINATION_XPATH)
         scroll_to_view(driver, pagination_element)
         current_page = int(
-            pagination_element.find_element(
-                By.XPATH, "//button[contains(@class, 'active')]"
-            ).text
+            pagination_element.find_element(By.XPATH, CURRENT_PAGE_XPATH).text
         )
     except Exception as e:
         print_lg("Failed to find Pagination element, hence couldn't scroll till end!")
@@ -420,24 +359,16 @@ def get_job_main_details(
     * skip: A boolean flag to skip this job
     """
     skip = False
-    job_details_button = job.find_element(
-        By.TAG_NAME, "a"
-    )  # job.find_element(By.CLASS_NAME, "job-card-list__title")  # Problem in India
-    # Avoid placing the link under fixed LinkedIn top navigation.
+    # The whole card is the clickable element that opens the job details.
+    job_details_button = job
+    # Avoid placing the card under fixed LinkedIn top navigation.
     scroll_to_view(driver, job_details_button)
-    job_id = job.get_dom_attribute("data-occludable-job-id")
-    title = job_details_button.text
-    title = title[: title.find("\n")]
-    # company = job.find_element(By.CLASS_NAME, "job-card-container__primary-description").text
-    # work_location = job.find_element(By.CLASS_NAME, "job-card-container__metadata-item").text
-    other_details = job.find_element(
-        By.CLASS_NAME, "artdeco-entity-lockup__subtitle"
-    ).text
-    index = other_details.find(" · ")
-    company = other_details[:index]
-    work_location = other_details[index + 3 :]
-    work_style = work_location[work_location.rfind("(") + 1 : work_location.rfind(")")]
-    work_location = work_location[: work_location.rfind("(")].strip()
+    job_id = job_id_from_card_key(job.get_dom_attribute("componentkey"))
+    title = job.find_element(By.XPATH, CARD_TITLE_XPATH).text.strip()
+    company = job.find_element(By.XPATH, CARD_COMPANY_XPATH).text.strip()
+    work_location, work_style = split_work_location(
+        job.find_element(By.XPATH, CARD_LOCATION_XPATH).text
+    )
 
     # Skip if previously rejected due to blacklist or already applied
     if company in blacklisted_companies:
@@ -450,15 +381,9 @@ def get_job_main_details(
             f'Skipping previously rejected "{title} | {company}" job. Job ID: {job_id}!'
         )
         skip = True
-    try:
-        if (
-            job.find_element(By.CLASS_NAME, "job-card-container__footer-job-state").text
-            == "Applied"
-        ):
-            skip = True
-            print_lg(f'Already applied to "{title} | {company}" job. Job ID: {job_id}!')
-    except:
-        pass
+    if not skip and job.find_elements(By.XPATH, CARD_APPLIED_XPATH):
+        skip = True
+        print_lg(f'Already applied to "{title} | {company}" job. Job ID: {job_id}!')
     try:
         if not skip:
             try:
@@ -482,6 +407,19 @@ def get_job_main_details(
         # print_lg(e)
         discard_job()
         job_details_button.click()  # To pass the error outside
+    if not skip:
+        # Wait for the details panel to show this job, so later reads don't get the previous job's details.
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, job_details_loaded_xpath(job_id))
+                )
+            )
+        except TimeoutException:
+            print_lg(
+                f'Details of "{title} | {company}" job did not load, skipping it. Job ID: {job_id}!'
+            )
+            skip = True
     buffer(click_gap)
     return (job_id, title, company, work_location, work_style, skip)
 
@@ -490,16 +428,10 @@ def get_job_main_details(
 def check_blacklist(
     rejected_jobs: set, job_id: str, company: str, blacklisted_companies: set
 ) -> tuple[set, set, WebElement] | ValueError:
-    jobs_top_card = try_find_by_classes(
-        driver,
-        [
-            "job-details-jobs-unified-top-card__primary-description-container",
-            "job-details-jobs-unified-top-card__primary-description",
-            "jobs-unified-top-card__primary-description",
-            "jobs-details__main-content",
-        ],
+    jobs_top_card = driver.find_element(By.XPATH, JOB_DETAILS_XPATH)
+    about_company_org = WebDriverWait(driver, 5).until(
+        EC.presence_of_element_located((By.XPATH, about_company_xpath(job_id)))
     )
-    about_company_org = find_by_class(driver, "jobs-company__box")
     scroll_to_view(driver, about_company_org)
     about_company_org = about_company_org.text
     about_company = about_company_org.lower()
@@ -532,11 +464,11 @@ def extract_years_of_experience(text: str) -> int:
     return max([int(match) for match in matches if int(match) <= 12])
 
 
-def get_job_description() -> (
-    tuple[
-        str | Literal["Unknown"], int | Literal["Unknown"], bool, str | None, str | None
-    ]
-):
+def get_job_description(
+    job_id: str,
+) -> tuple[
+    str | Literal["Unknown"], int | Literal["Unknown"], bool, str | None, str | None
+]:
     """
     # Job Description
     Function to extract job description from About the Job.
@@ -547,17 +479,22 @@ def get_job_description() -> (
     - `skipReason: str | None`
     - `skipMessage: str | None`
     """
+    # Set before the `try`, so they're defined when returned after a failed extraction.
+    skip = False
+    skipReason = None
+    skipMessage = None
     try:
         ##> ------ Dheeraj Deshwal : dheeraj9811 Email:dheeraj20194@iiitd.ac.in/dheerajdeshwal9811@gmail.com - Feature ------
         jobDescription = "Unknown"
         ##<
         experience_required = "Unknown"
         found_masters = 0
-        jobDescription = find_by_class(driver, "jobs-box__html-content").text
+        about_job = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.XPATH, about_job_xpath(job_id)))
+        )
+        # innerText includes lines hidden behind the "… more" button, unlike .text
+        jobDescription = clean_description(about_job.get_attribute("innerText"))
         jobDescriptionLow = jobDescription.lower()
-        skip = False
-        skipReason = None
-        skipMessage = None
         for word in bad_words:
             if word.lower() in jobDescriptionLow:
                 skipMessage = f'\n{jobDescription}\n\nContains bad word "{word}". Skipping this job!\n'
@@ -591,6 +528,7 @@ def get_job_description() -> (
     except Exception as e:
         if jobDescription == "Unknown":
             print_lg("Unable to extract job description!")
+            save_debug_page("Job description not found")
         else:
             experience_required = "Error in extraction"
             print_lg("Unable to extract years of experience required!")
@@ -624,7 +562,7 @@ def answer_questions(
 ) -> set:
     # Get all questions from the page
 
-    all_questions = modal.find_elements(By.XPATH, ".//div[@data-test-form-element]")
+    all_questions = modal.find_elements(By.XPATH, FORM_QUESTIONS_XPATH)
     # all_questions = modal.find_elements(By.CLASS_NAME, "jobs-easy-apply-form-element")
     # all_list_questions = modal.find_elements(By.XPATH, ".//div[@data-test-text-entity-list-form-component]")
     # all_single_line_questions = modal.find_elements(By.XPATH, ".//div[@data-test-single-line-text-form-component]")
@@ -634,12 +572,7 @@ def answer_questions(
         # Check if it's a select Question
         select = try_xp(Question, ".//select", False)
         if select:
-            label_org = "Unknown"
-            try:
-                label = Question.find_element(By.TAG_NAME, "label")
-                label_org = label.find_element(By.TAG_NAME, "span").text
-            except:
-                pass
+            label_org = question_label(Question, select)
             answer = "Yes"
             label = label_org.lower()
             select = Select(select)
@@ -650,10 +583,17 @@ def answer_questions(
                 optionsText = [option.text for option in select.options]
                 options = "".join([f' "{option}",' for option in optionsText])
             prev_answer = selected_option
-            if overwrite_previous_answers or selected_option == "Select an option":
+            # An unanswered select shows "Select an option", or an empty placeholder in the new Easy Apply form.
+            if overwrite_previous_answers or selected_option in ("Select an option", ""):
                 ##> ------ WINDY_WINDWARD Email:karthik.sarode23@gmail.com - Added fuzzy logic to answer location based questions ------
                 if "email" in label or "phone" in label:
                     answer = prev_answer
+                    if not answer:
+                        # Nothing prefilled to keep; leave it for "Pause at failed question".
+                        questions_list.add(
+                            (f"{label_org} [ {options} ]", answer, "select", prev_answer)
+                        )
+                        continue
                 elif "gender" in label or "sex" in label:
                     answer = gender
                 elif "disability" in label:
@@ -735,10 +675,10 @@ def answer_questions(
             )
             continue
 
-        # Check if it's a radio Question
+        # Check if it's a radio Question (the question itself may be the fieldset)
         radio = try_xp(
             Question,
-            './/fieldset[@data-test-form-builder-radio-button-form-component="true"]',
+            "self::fieldset[.//input[@type='radio']] | .//fieldset[.//input[@type='radio']]",
             False,
         )
         if radio:
@@ -752,7 +692,19 @@ def answer_questions(
                 label = find_by_class(label, "visually-hidden", 2.0)
             except:
                 pass
-            label_org = label.text if label else "Unknown"
+            if not label:
+                label = try_xp(radio, ".//legend", False)
+            label_org = label.text if label else ""
+            if not label_org:
+                # New Easy Apply form: each option carries the question in aria-label.
+                radio_option = try_xp(radio, RADIO_OPTIONS_XPATH, False)
+                label_org = (
+                    question_label_text(
+                        (radio_option.get_attribute("aria-label") if radio_option else "")
+                        or ""
+                    )
+                    or "Unknown"
+                )
             answer = "Yes"
             label = label_org.lower()
 
@@ -763,8 +715,13 @@ def answer_questions(
             for option in options:
                 id = option.get_attribute("id")
                 option_label = try_xp(radio, f'.//label[@for="{id}"]', False)
+                option_text = option_label.text if option_label else ""
+                if not option_text:
+                    # New Easy Apply form: the label is empty, the text is on the role="radio" option.
+                    radio_option = try_xp(option, RADIO_OPTION_OF_INPUT_XPATH, False)
+                    option_text = radio_option.text if radio_option else "Unknown"
                 options_labels.append(
-                    f'"{option_label.text if option_label else "Unknown"}"<{option.get_attribute("value")}>'
+                    f'"{option_text}"<{option.get_attribute("value")}>'
                 )  # Saving option as "label <value>"
                 if option.is_selected():
                     prev_answer = options_labels[-1]
@@ -781,7 +738,7 @@ def answer_questions(
                     answer = answer_common_questions(label, answer)
                 foundOption = try_xp(
                     radio, f".//label[normalize-space()='{answer}']", False
-                )
+                ) or try_xp(radio, radio_option_xpath(answer), False)
                 if foundOption:
                     actions.move_to_element(foundOption).click().perform()
                 else:
@@ -813,6 +770,8 @@ def answer_questions(
                     #             answer = f'Decline ({phrase})'
                     #             ele = foundOption
                     #             break
+                    # Click the visible role="radio" option rather than its hidden <input>, when there is one.
+                    ele = try_xp(ele, RADIO_OPTION_OF_INPUT_XPATH, False) or ele
                     actions.move_to_element(ele).click().perform()
                     if not foundOption:
                         randomly_answered_questions.add((f"{label_org} ]", "radio"))
@@ -822,15 +781,10 @@ def answer_questions(
             continue
 
         # Check if it's a text question
-        text = try_xp(Question, ".//input[@type='text']", False)
+        text = try_xp(Question, FORM_TEXT_INPUT_XPATH, False)
         if text:
             do_actions = False
-            label = try_xp(Question, ".//label[@for]", False)
-            try:
-                label = label.find_element(By.CLASS_NAME, "visually-hidden")
-            except:
-                pass
-            label_org = label.text if label else "Unknown"
+            label_org = question_label(Question, text)
             answer = ""  # years_of_experience
             label = label_org.lower()
 
@@ -1000,8 +954,7 @@ def answer_questions(
         # Check if it's a textarea question
         text_area = try_xp(Question, ".//textarea", False)
         if text_area:
-            label = try_xp(Question, ".//label[@for]", False)
-            label_org = label.text if label else "Unknown"
+            label_org = question_label(Question, text_area)
             label = label_org.lower()
             answer = ""
             prev_answer = text_area.get_attribute("value")
@@ -1080,10 +1033,6 @@ def answer_questions(
                         randomly_answered_questions.add((label_org, "textarea"))
             text_area.clear()
             text_area.send_keys(answer)
-            if do_actions:
-                sleep(2)
-                actions.send_keys(Keys.ARROW_DOWN)
-                actions.send_keys(Keys.ENTER).perform()
             questions_list.add(
                 (label, text_area.get_attribute("value"), "textarea", prev_answer)
             )
@@ -1093,7 +1042,9 @@ def answer_questions(
         # Check if it's a checkbox question
         checkbox = try_xp(Question, ".//input[@type='checkbox']", False)
         if checkbox:
-            label = try_xp(Question, ".//span[@class='visually-hidden']", False)
+            label = try_xp(Question, ".//span[@class='visually-hidden']", False) or try_xp(
+                Question, ".//legend", False
+            )
             label_org = label.text if label else "Unknown"
             label = label_org.lower()
             answer = try_xp(
@@ -1257,6 +1208,51 @@ def failed_job(
         )
 
 
+def email_apply_job(
+    job_id: str,
+    title: str,
+    company: str,
+    apply_email: str,
+    email_subject: str,
+    job_link: str,
+) -> None:
+    """
+    Logs a job whose description asks you to apply by email, so you can follow up manually.
+    Saved to `email_apply_file_name` (see config/settings.py).
+    """
+    try:
+        with open(email_apply_file_name, "a", newline="", encoding="utf-8") as file:
+            fieldnames = [
+                "Job ID",
+                "Title",
+                "Company",
+                "Apply Email",
+                "Email Subject",
+                "Job Link",
+                "Date Found",
+            ]
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            if file.tell() == 0:
+                writer.writeheader()
+            writer.writerow(
+                {
+                    "Job ID": truncate_for_csv(job_id),
+                    "Title": truncate_for_csv(title),
+                    "Company": truncate_for_csv(company),
+                    "Apply Email": truncate_for_csv(apply_email),
+                    "Email Subject": truncate_for_csv(email_subject or ""),
+                    "Job Link": truncate_for_csv(job_link),
+                    "Date Found": datetime.now(),
+                }
+            )
+        print_lg(
+            f'Logged email-apply job: "{title}" at "{company}" -> {apply_email}'
+            + (f' (subject: "{email_subject}")' if email_subject else "")
+        )
+    except Exception as e:
+        print_lg("Failed to log email-apply job!", e)
+
+
 def screenshot(driver: WebDriver, job_id: str, failedAt: str) -> str:
     """
     Function to to take screenshot for debugging
@@ -1370,17 +1366,24 @@ def apply_to_jobs(search_terms: list[str]) -> None:
         shuffle(search_terms)
     for searchTerm in search_terms:
         search_url = build_jobs_search_url(
-            searchTerm, date_posted=date_posted, sort_by=sort_by
+            searchTerm,
+            date_posted=date_posted,
+            sort_by=sort_by,
+            location=search_location,
+            easy_apply_only=easy_apply_only,
+            experience_level=experience_level,
+            job_type=job_type,
+            on_site=on_site,
+            salary=salary,
+            under_10_applicants=under_10_applicants,
+            in_your_network=in_your_network,
         )
         driver.get(search_url)
         print_lg(
             "\n________________________________________________________________________________________________________________________\n"
         )
         print_lg(f'\n>>>> Now searching for "{searchTerm}" <<<<\n\n')
-        if date_posted or sort_by:
-            print_lg(
-                f"Search URL filters: date_posted={date_posted!r}, sort_by={sort_by!r}"
-            )
+        print_lg(f"Search URL: {search_url}")
 
         apply_filters()
 
@@ -1389,26 +1392,39 @@ def apply_to_jobs(search_terms: list[str]) -> None:
         try:
             while current_count < switch_number:
                 # Wait until job listings are loaded
-                wait.until(
-                    EC.presence_of_all_elements_located(
-                        (By.XPATH, "//li[@data-occludable-job-id]")
+                try:
+                    wait.until(
+                        EC.presence_of_all_elements_located((By.XPATH, JOB_CARDS_XPATH))
                     )
-                )
+                except TimeoutException:
+                    save_debug_page("Job listings not found")
+                    raise
 
                 pagination_element, current_page = get_page_info()
 
-                # Find all job listings in current page
+                # Find all job listings in current page. Collect ids first: opening a job
+                # re-renders the list, which would make held card elements stale.
                 buffer(3)
-                job_listings = driver.find_elements(
-                    By.XPATH, "//li[@data-occludable-job-id]"
-                )
+                job_ids_on_page = [
+                    job_id_from_card_key(card.get_dom_attribute("componentkey"))
+                    for card in driver.find_elements(By.XPATH, JOB_CARDS_XPATH)
+                ]
+                print_lg(f"Found {len(job_ids_on_page)} jobs on page {current_page}.")
+                if not job_ids_on_page:
+                    save_debug_page("No job cards on page")
 
-                for job in job_listings:
+                for job_id in job_ids_on_page:
                     if keep_screen_awake:
                         pyautogui.press("shiftright")
                     if current_count >= switch_number:
                         break
                     print_lg("\n-@-\n")
+
+                    try:
+                        job = driver.find_element(By.XPATH, job_card_xpath(job_id))
+                    except NoSuchElementException:
+                        print_lg(f"Job card disappeared from the list. Job ID: {job_id}!")
+                        continue
 
                     job_id, title, company, work_location, work_style, skip = (
                         get_job_main_details(job, blacklisted_companies, rejected_jobs)
@@ -1417,18 +1433,14 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     if skip:
                         continue
                     # Redundant fail safe check for applied jobs!
-                    try:
-                        if job_id in applied_jobs or find_by_class(
-                            driver, "jobs-s-apply__application-link", 2
-                        ):
-                            print_lg(
-                                f'Already applied to "{title} | {company}" job. Job ID: {job_id}!'
-                            )
-                            continue
-                    except Exception as e:
+                    if job_id in applied_jobs:
                         print_lg(
-                            f'Trying to Apply to "{title} | {company}" job. Job ID: {job_id}'
+                            f'Already applied to "{title} | {company}" job. Job ID: {job_id}!'
                         )
+                        continue
+                    print_lg(
+                        f'Trying to Apply to "{title} | {company}" job. Job ID: {job_id}'
+                    )
 
                     job_link = "https://www.linkedin.com/jobs/view/" + job_id
                     application_link = "Easy Applied"
@@ -1471,13 +1483,13 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                     try:
                         hr_info_card = WebDriverWait(driver, 2).until(
                             EC.presence_of_element_located(
-                                (By.CLASS_NAME, "hirer-card__hirer-information")
+                                (By.XPATH, hiring_team_link_xpath(job_id))
                             )
                         )
-                        hr_link = hr_info_card.find_element(
-                            By.TAG_NAME, "a"
-                        ).get_attribute("href")
-                        hr_name = hr_info_card.find_element(By.TAG_NAME, "span").text
+                        hr_link = hr_info_card.get_attribute("href")
+                        hr_name = hr_info_card.find_element(
+                            By.XPATH, HIRER_NAME_XPATH
+                        ).text
                         # if connect_hr:
                         #     driver.switch_to.new_window('tab')
                         #     driver.get(hr_link)
@@ -1505,7 +1517,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         # try: time_posted_text = find_by_class(driver, "jobs-unified-top-card__posted-date", 2).text
                         # except:
                         time_posted_text = jobs_top_card.find_element(
-                            By.XPATH, './/span[contains(normalize-space(), " ago")]'
+                            By.XPATH, TIME_POSTED_XPATH
                         ).text
                         print("Time Posted: " + time_posted_text)
                         if time_posted_text.__contains__("Reposted"):
@@ -1516,7 +1528,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         print_lg("Failed to calculate the date posted!", e)
 
                     description, experience_required, skip, reason, message = (
-                        get_job_description()
+                        get_job_description(job_id)
                     )
                     if skip:
                         print_lg(message)
@@ -1555,12 +1567,13 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             skills = "Error extracting skills"
                         ##<
 
-                    # AI relevance filtering: score this job against your profile and skip poor fits.
+                    # AI screen: score the job against your profile (to skip poor fits) and
+                    # detect "apply by email" postings (to log the email for manual follow-up).
                     if (
                         use_AI
                         and aiClient
                         and ai_provider.lower() in ("claude", "glm")
-                        and ai_filter_jobs
+                        and (ai_filter_jobs or ai_log_email_apply)
                         and description != "Unknown"
                     ):
                         try:
@@ -1578,52 +1591,77 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     about_company=company,
                                     user_information_all=user_information_all,
                                 )
-                            match_score = relevance.get("match_score")
-                            relevance_reasons = relevance.get("reasons", "")
-                            if match_score is not None:
-                                print_lg(
-                                    f'AI job match score: {match_score}/100 (threshold {ai_min_match_score}). '
-                                    f'Reason: {relevance_reasons}'
+
+                            # Log jobs that ask to apply by email (independent of the skip decision).
+                            if (
+                                ai_log_email_apply
+                                and relevance.get("apply_by_email")
+                                and relevance.get("apply_email")
+                            ):
+                                email_apply_job(
+                                    job_id,
+                                    title,
+                                    company,
+                                    relevance.get("apply_email"),
+                                    relevance.get("email_subject", ""),
+                                    job_link,
                                 )
-                                if (
-                                    ai_min_match_score > 0
-                                    and match_score < ai_min_match_score
-                                ):
-                                    message = (
-                                        f"\nAI match score {match_score} < {ai_min_match_score} "
-                                        f"for '{title}' at '{company}'. Reason: {relevance_reasons}\n"
-                                        f"Missing skills: {relevance.get('missing_skills')}\n"
+
+                            # Relevance filtering / skip decision.
+                            if ai_filter_jobs:
+                                match_score = relevance.get("match_score")
+                                relevance_reasons = relevance.get("reasons", "")
+                                if match_score is not None:
+                                    print_lg(
+                                        f"AI job match score: {match_score}/100 (threshold {ai_min_match_score}). "
+                                        f"Reason: {relevance_reasons}"
                                     )
-                                    print_lg(message)
-                                    failed_job(
-                                        job_id,
-                                        job_link,
-                                        resume,
-                                        date_listed,
-                                        "AI: low relevance",
-                                        message,
-                                        "Skipped",
-                                        screenshot_name,
+                                    if (
+                                        ai_min_match_score > 0
+                                        and match_score < ai_min_match_score
+                                    ):
+                                        message = (
+                                            f"\nAI match score {match_score} < {ai_min_match_score} "
+                                            f"for '{title}' at '{company}'. Reason: {relevance_reasons}\n"
+                                            f"Missing skills: {relevance.get('missing_skills')}\n"
+                                        )
+                                        print_lg(message)
+                                        failed_job(
+                                            job_id,
+                                            job_link,
+                                            resume,
+                                            date_listed,
+                                            "AI: low relevance",
+                                            message,
+                                            "Skipped",
+                                            screenshot_name,
+                                        )
+                                        rejected_jobs.add(job_id)
+                                        skip_count += 1
+                                        continue
+                                else:
+                                    print_lg(
+                                        "AI relevance check returned no score; applying anyway.",
+                                        relevance,
                                     )
-                                    rejected_jobs.add(job_id)
-                                    skip_count += 1
-                                    continue
-                            else:
-                                print_lg(
-                                    "AI relevance check returned no score; applying anyway.",
-                                    relevance,
-                                )
                         except Exception as e:
-                            # Fail open: if the relevance check errors, don't skip the job.
-                            print_lg("Failed AI relevance check, applying anyway:", e)
+                            # Fail open: if the AI screen errors, don't skip the job.
+                            print_lg("Failed AI screen, applying anyway:", e)
 
                     uploaded = False
                     # Case 1: Easy Apply Button
-                    # First try the classic button with "Easy" in aria-label
-                    is_easy_apply = try_xp(
-                        driver,
-                        ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]",
-                    )
+                    is_easy_apply = click_displayed(driver, EASY_APPLY_BUTTON_XPATH)
+                    if not is_easy_apply:
+                        print_lg(
+                            f'Didn\'t find a visible Easy Apply button for "{title} | {company}".'
+                        )
+                        save_debug_page("Easy Apply button not found")
+                    # Fallback: the classic button with "Easy" in aria-label
+                    if not is_easy_apply:
+                        is_easy_apply = try_xp(
+                            driver,
+                            ".//button[contains(@class,'jobs-apply-button') and contains(@class, 'artdeco-button--3') and contains(@aria-label, 'Easy')]",
+                        )
                     # Fallback 1: check if apply link contains Easy Apply URL pattern
                     if not is_easy_apply:
                         try:
@@ -1680,19 +1718,47 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                             pass
                     if is_easy_apply:
                         try:
+                            # Find the dialog before the `try`/`finally` below, so its Review
+                            # and Submit steps never run when the dialog didn't open.
+                            errored = ""
                             try:
-                                errored = ""
-                                modal = find_by_class(driver, "jobs-easy-apply-modal")
-                                wait_span_click(modal, "Next", 1)
+                                # Wait for the form, or LinkedIn's "may not be the best fit" prompt before it.
+                                wait.until(
+                                    EC.presence_of_element_located(
+                                        (
+                                            By.XPATH,
+                                            f"{EASY_APPLY_MODAL_XPATH} | {APPLY_INTERCEPT_CONTINUE_XPATH}",
+                                        )
+                                    )
+                                )
+                                # The job filters already decided to apply, so continue past the prompt.
+                                if click_displayed(driver, APPLY_INTERCEPT_CONTINUE_XPATH):
+                                    print_lg(
+                                        'LinkedIn says this job may not be the best fit, clicking "Continue applying".'
+                                    )
+                                modal = wait.until(
+                                    EC.presence_of_element_located(
+                                        (By.XPATH, EASY_APPLY_MODAL_XPATH)
+                                    )
+                                )
+                            except TimeoutException:
+                                save_debug_page("Easy Apply modal not found")
+                                raise
+                            try:
+                                # Skip the contact info page. One-page forms have no "Next"; the loop below handles them.
+                                wait_span_click(modal, "Next", 1, quiet=True)
                                 # if description != "Unknown":
                                 #     resume = create_custom_resume(description)
                                 resume = "Previous resume"
                                 next_button = True
                                 questions_list = set()
                                 next_counter = 0
+                                # Next/Review clicks in a row that left the form on the same page,
+                                # which happens when required questions are unanswered.
+                                failed_attempts = 0
                                 while next_button:
                                     next_counter += 1
-                                    if next_counter >= 15:
+                                    if failed_attempts >= 2 or next_counter >= 15:
                                         if pause_at_failed_question:
                                             screenshot(
                                                 driver,
@@ -1700,11 +1766,12 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                                 "Needed manual intervention for failed question",
                                             )
                                             pyautogui.alert(
-                                                'Couldn\'t answer one or more questions.\nPlease click "Continue" once done.\nDO NOT CLICK Back, Next or Review button in LinkedIn.\n\n\n\n\nYou can turn off "Pause at failed question" setting in config.py',
+                                                'Couldn\'t answer one or more questions.\nPlease fill them in LinkedIn, then press Enter here (or click "Continue") and the bot will carry on.\nDO NOT CLICK Back, Next or Review button in LinkedIn.\n\n\n\n\nYou can turn off "Pause at failed question" setting in config.py',
                                                 "Help Needed",
                                                 "Continue",
                                             )
                                             next_counter = 1
+                                            failed_attempts = 0
                                             continue
                                         if questions_list:
                                             print_lg(
@@ -1718,6 +1785,14 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                         raise Exception(
                                             "Seems like stuck in a continuous loop of next, probably because of new questions."
                                         )
+                                    # Save each kind of form page once, to adapt to LinkedIn's form changes.
+                                    try:
+                                        page_title = modal.find_element(
+                                            By.XPATH, EASY_APPLY_PAGE_TITLE_XPATH
+                                        ).text
+                                    except NoSuchElementException:
+                                        page_title = "Untitled"
+                                    save_debug_page(f"Easy Apply page - {page_title}")
                                     questions_list = answer_questions(
                                         modal,
                                         questions_list,
@@ -1738,11 +1813,22 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                             By.XPATH,
                                             './/button[contains(span, "Next")]',
                                         )
+                                    page_before = form_page_key(modal)
                                     try:
                                         next_button.click()
                                     except ElementClickInterceptedException:
                                         break  # Happens when it tries to click Next button in About Company photos section
                                     buffer(click_gap)
+                                    try:
+                                        WebDriverWait(driver, 3).until(
+                                            lambda _: form_page_key(modal) != page_before
+                                        )
+                                        failed_attempts = 0
+                                    except TimeoutException:
+                                        failed_attempts += 1
+                                        print_lg(
+                                            f"Form didn't move on after clicking Next/Review (attempt {failed_attempts} of 2), probably unanswered required questions."
+                                        )
 
                             except NoSuchElementException:
                                 errored = "nose"
@@ -1765,10 +1851,11 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     decision = pyautogui.confirm(
                                         '1. Please verify your information.\n2. If you edited something, please return to this final screen.\n3. DO NOT CLICK "Submit Application".\n\n\n\n\nYou can turn off "Pause before submit" setting in config.py\nTo TEMPORARILY disable pausing, click "Disable Pause"',
                                         "Confirm your information",
+                                        # "Disable Pause" isn't first: pressing Enter in the terminal picks the first button.
                                         [
-                                            "Disable Pause",
-                                            "Discard Application",
                                             "Submit Application",
+                                            "Discard Application",
+                                            "Disable Pause",
                                         ],
                                     )
                                     if decision == "Discard Application":
@@ -1805,6 +1892,7 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                                     print_lg(
                                         "Since, Submit Application failed, discarding the job application..."
                                     )
+                                    save_debug_page("Submit application not found")
                                     # if screenshot_name == "Not Available":  screenshot_name = screenshot(driver, job_id, "Failed to click Submit application")
                                     # else:   screenshot_name = [screenshot_name, screenshot(driver, job_id, "Failed to click Submit application")]
                                     if errored == "nose":
@@ -1912,24 +2000,35 @@ def apply_to_jobs(search_terms: list[str]) -> None:
                         "Couldn't find pagination element, probably at the end page of results!"
                     )
                     break
-                try:
-                    pagination_element.find_element(
-                        By.XPATH, f"//button[@aria-label='Page {current_page+1}']"
-                    ).click()
-                    print_lg(f"\n>-> Now on Page {current_page+1} \n")
-                except NoSuchElementException:
+                next_page = current_page + 1
+                # Only a window of page numbers is shown, so fall back to the "Next" button.
+                next_page_button = try_xp(
+                    driver, page_button_xpath(next_page), False
+                ) or try_xp(driver, NEXT_PAGE_BUTTON_XPATH, False)
+                if not next_page_button:
                     print_lg(
-                        f"\n>-> Didn't find Page {current_page+1}. Probably at the end page of results!\n"
+                        f"\n>-> Didn't find Page {next_page}. Probably at the end page of results!\n"
                     )
                     break
+                next_page_button.click()
+                # Wait for the new page, so the old page's job cards aren't read again.
+                wait.until(
+                    EC.presence_of_element_located(
+                        (
+                            By.XPATH,
+                            page_button_xpath(next_page) + "[@aria-current='true']",
+                        )
+                    )
+                )
+                print_lg(f"\n>-> Now on Page {next_page} \n")
 
-        except (NoSuchWindowException, WebDriverException) as e:
-            print_lg(
-                "Browser window closed or session is invalid. Ending application process.",
-                e,
-            )
-            raise e  # Re-raise to be caught by main
         except Exception as e:
+            if is_browser_gone(e):
+                print_lg(
+                    "Browser window closed or session is invalid. Ending application process.",
+                    e,
+                )
+                raise e  # Re-raise to be caught by main
             print_lg("Failed to find Job listings!")
             critical_error_log("In Applier", e)
             try:
@@ -2076,11 +2175,12 @@ def main() -> None:
             if dailyEasyApplyLimitReached:
                 break
 
-    except (NoSuchWindowException, WebDriverException) as e:
-        print_lg("Browser window closed or session is invalid. Exiting.", e)
     except Exception as e:
-        critical_error_log("In Applier Main", e)
-        pyautogui.alert(e, alert_title)
+        if is_browser_gone(e):
+            print_lg("Browser window closed or session is invalid. Exiting.", e)
+        else:
+            critical_error_log("In Applier Main", e)
+            pyautogui.alert(e, alert_title)
     finally:
         summary = "Total runs: {}\nJobs Easy Applied: {}\nExternal job links collected: {}\nTotal applied or collected: {}\nFailed jobs: {}\nIrrelevant jobs skipped: {}\n".format(
             total_runs,

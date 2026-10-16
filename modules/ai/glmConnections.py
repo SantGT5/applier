@@ -7,11 +7,11 @@ endpoint, so this module talks to them with the official OpenAI Python SDK
 exposes (client creation, skill extraction, question answering, and AI-powered
 job relevance filtering), so the bot only applies to jobs that match your profile.
 
-Configure your key, model, and endpoint in `config/secrets.py`
-(`glm_api_key`, `glm_model`, `glm_api_url`).
+Configure your key, model, endpoint, and thinking depth in `config/secrets.py`
+(`glm_api_key`, `glm_model`, `glm_api_url`, `glm_reasoning_effort`).
 '''
 
-from config.secrets import use_AI, glm_api_key, glm_model, glm_api_url
+from config.secrets import use_AI, glm_api_key, glm_model, glm_api_url, glm_reasoning_effort
 from config.settings import showAiErrorAlerts
 from modules.helpers import print_lg, critical_error_log
 from modules.ai.prompts import (
@@ -164,6 +164,18 @@ def glm_create_client() -> "OpenAI | None":
         return None
 
 
+def glm_thinking_params(reasoning_effort: str) -> dict:
+    '''
+    Request params for GLM's thinking, from `glm_reasoning_effort` in `config/secrets.py`.
+    * GLM-5.3 models always think (sending "disabled" is rejected); `reasoning_effort`
+      ("low", "high", "max") sets how deeply.
+    * "none" (or "") turns thinking off, for older models that support that.
+    '''
+    if reasoning_effort in ("", "none"):
+        return {"thinking": {"type": "disabled"}}
+    return {"thinking": {"type": "enabled"}, "reasoning_effort": reasoning_effort}
+
+
 def glm_completion(
     client: "OpenAI",
     prompt: str,
@@ -177,11 +189,7 @@ def glm_completion(
     * `as_json`: when `True`, asks the endpoint for a JSON object
       (`response_format={"type": "json_object"}`) and returns a parsed `dict`.
     * `temperature`: kept low for deterministic, per-job calls.
-    * `thinking`: GLM-4.x are hybrid reasoning models with "thinking" ON by
-      default, and the reasoning tokens are drawn from `max_tokens` — long
-      reasoning can eat the whole budget and leave `content` empty. It's disabled
-      here by default so per-job calls return their answer directly (faster,
-      cheaper, and reliable). Enable it only when you want deeper judgment.
+    * Thinking depth comes from `glm_reasoning_effort` (see `glm_thinking_params`).
     * Returns parsed JSON `dict` (when `as_json` is set) or plain text `str`.
     '''
     if not client:
@@ -192,9 +200,7 @@ def glm_completion(
         "max_tokens": max_tokens,
         "temperature": temperature,
         "messages": [{"role": "user", "content": prompt}],
-        # Keep reasoning off unless requested so it doesn't consume the token
-        # budget meant for the actual answer (see `thinking` above).
-        "extra_body": {"thinking": {"type": "enabled" if thinking else "disabled"}},
+        "extra_body": glm_thinking_params(glm_reasoning_effort),
     }
     if as_json:
         # The prompts already instruct the model to return JSON; this constrains

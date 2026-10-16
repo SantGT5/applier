@@ -19,11 +19,11 @@ version:    26.01.20.5.08
 # These Sentences are Searched in LinkedIn
 # Enter your search terms inside '[ ]' with quotes ' "searching title" ' for each search followed by comma ', ' Eg: ["Software Engineer", "Software Developer", "Selenium Developer"]
 search_terms = [
-    "Python Developer",
     "Software Engineer",
-    "Full Stack",
     "Backend Engineer",
+    "Full Stack",
     "TypeScript Developer",
+    "Python Developer",
     "Golang Developer",
     "Nodejs Developer",
 ]

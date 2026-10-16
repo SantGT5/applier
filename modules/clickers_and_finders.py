@@ -16,6 +16,7 @@ version:    26.01.20.5.08
 
 from config.settings import click_gap, smooth_scroll
 from modules.helpers import buffer, print_lg, sleep
+from selenium.common.exceptions import ElementClickInterceptedException, ElementNotInteractableException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -107,7 +108,7 @@ def find_filter_span(
     raise Exception(f"Filter option not found: {text!r}")
 
 
-def wait_span_click(driver: WebDriver, text: str, time: float=5.0, click: bool=True, scroll: bool=True, scrollTop: bool=False, section: str | None = None) -> WebElement | bool:
+def wait_span_click(driver: WebDriver, text: str, time: float=5.0, click: bool=True, scroll: bool=True, scrollTop: bool=False, section: str | None = None, quiet: bool = False) -> WebElement | bool:
     '''
     Finds the span element with the given `text`.
     - Returns `WebElement` if found, else `False` if not found.
@@ -116,6 +117,7 @@ def wait_span_click(driver: WebDriver, text: str, time: float=5.0, click: bool=T
     - Will scroll to the element if `scroll = True`.
     - Will scroll to the top if `scrollTop = True`.
     - If `section` is set (e.g. "Date posted"), search within that filter group first.
+    - Won't log a missing element if `quiet = True`, for elements that may be absent.
     '''
     if text:
         for xpath in _filter_span_xpaths(text, section):
@@ -132,7 +134,8 @@ def wait_span_click(driver: WebDriver, text: str, time: float=5.0, click: bool=T
                 return button
             except Exception:
                 continue
-        print_lg("Click Failed! Didn't find '" + text + "'")
+        if not quiet:
+            print_lg("Click Failed! Didn't find '" + text + "'")
         return False
 
 def multi_sel(
@@ -234,6 +237,24 @@ def try_xp(driver: WebDriver, xpath: str, click: bool=True) -> WebElement | bool
         else:
             return driver.find_element(By.XPATH, xpath)
     except: return False
+
+def click_displayed(driver: WebDriver, xpath: str) -> bool:
+    '''
+    Clicks the first displayed element matching `xpath`. Returns `False` if there's none.
+    Falls back to a JavaScript click when something (e.g. a sticky header) covers the element.
+    '''
+    displayed = [element for element in driver.find_elements(By.XPATH, xpath) if element.is_displayed()]
+    if not displayed:
+        return False
+    element = displayed[0]
+    scroll_to_view(driver, element, smooth_scroll=False)
+    try:
+        element.click()
+    except (ElementClickInterceptedException, ElementNotInteractableException) as e:
+        # First line only: the full message carries a long chromedriver stack trace.
+        print_lg("Click was blocked, clicking with JavaScript instead:", e.msg.splitlines()[0] if e.msg else e)
+        driver.execute_script("arguments[0].click();", element)
+    return True
 
 def try_linkText(driver: WebDriver, linkText: str) -> WebElement | bool:
     try:    return driver.find_element(By.LINK_TEXT, linkText)

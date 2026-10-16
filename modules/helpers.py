@@ -403,13 +403,66 @@ SORT_BY_URL = {
 }
 
 
+EXPERIENCE_LEVEL_F_E = {
+    "Internship": "1",
+    "Entry level": "2",
+    "Associate": "3",
+    "Mid-Senior level": "4",
+    "Director": "5",
+    "Executive": "6",
+}
+
+JOB_TYPE_F_JT = {
+    "Full-time": "F",
+    "Part-time": "P",
+    "Contract": "C",
+    "Temporary": "T",
+    "Volunteer": "V",
+    "Internship": "I",
+    "Other": "O",
+}
+
+ON_SITE_F_WT = {
+    "On-site": "1",
+    "Remote": "2",
+    "Hybrid": "3",
+}
+
+SALARY_F_SB2 = {
+    "$40,000+": "1",
+    "$60,000+": "2",
+    "$80,000+": "3",
+    "$100,000+": "4",
+    "$120,000+": "5",
+    "$140,000+": "6",
+    "$160,000+": "7",
+    "$180,000+": "8",
+    "$200,000+": "9",
+}
+
+
 def build_jobs_search_url(
-    keywords: str, *, date_posted: str = "", sort_by: str = ""
+    keywords: str,
+    *,
+    date_posted: str = "",
+    sort_by: str = "",
+    location: str = "",
+    easy_apply_only: bool = False,
+    experience_level: list[str] = [],
+    job_type: list[str] = [],
+    on_site: list[str] = [],
+    salary: str = "",
+    under_10_applicants: bool = False,
+    in_your_network: bool = False,
 ) -> str:
     """
-    Build a LinkedIn jobs search URL with date and sort filters applied via query params.
+    Build a LinkedIn jobs search URL with the search filters applied via query params.
+    LinkedIn's AI-powered jobs search has no "All filters" panel, so the URL is how filters get applied.
     """
     from urllib.parse import urlencode
+
+    def codes(values: list[str], mapping: dict[str, str]) -> str:
+        return ",".join(mapping[value] for value in values if value in mapping)
 
     query: dict[str, str] = {"keywords": keywords}
     tpr = DATE_POSTED_F_TPR.get((date_posted or "").strip())
@@ -418,7 +471,50 @@ def build_jobs_search_url(
     sort = SORT_BY_URL.get((sort_by or "").strip())
     if sort:
         query["sortBy"] = sort
+    if location.strip():
+        query["location"] = location.strip()
+    if easy_apply_only:
+        query["f_AL"] = "true"
+    for param, values, mapping in (
+        ("f_E", experience_level, EXPERIENCE_LEVEL_F_E),
+        ("f_JT", job_type, JOB_TYPE_F_JT),
+        ("f_WT", on_site, ON_SITE_F_WT),
+    ):
+        if codes(values, mapping):
+            query[param] = codes(values, mapping)
+    if salary in SALARY_F_SB2:
+        query["f_SB2"] = SALARY_F_SB2[salary]
+    if under_10_applicants:
+        query["f_EA"] = "true"
+    if in_your_network:
+        query["f_JIYN"] = "true"
     return "https://www.linkedin.com/jobs/search/?" + urlencode(query)
+
+
+def unsupported_search_filters(**filters) -> list[str]:
+    """
+    Returns the names of the given filters that are set. Use it for filters that can't be
+    applied through the search URL (they need IDs or the old "All filters" panel).
+    """
+    return [name for name, value in filters.items() if value]
+
+
+def is_browser_gone(error: Exception) -> bool:
+    """
+    True if `error` means the browser window or WebDriver session is gone.
+    Element lookup errors like `TimeoutException` subclass `WebDriverException`
+    but don't mean the browser closed, so only the base class itself counts.
+    """
+    from selenium.common.exceptions import (
+        InvalidSessionIdException,
+        NoSuchWindowException,
+        WebDriverException,
+    )
+
+    return (
+        isinstance(error, (NoSuchWindowException, InvalidSessionIdException))
+        or type(error) is WebDriverException
+    )
 
 
 def calculate_date_posted(time_string: str) -> datetime | None | ValueError:
